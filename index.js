@@ -1,9 +1,13 @@
 require('dotenv').config()
 const express = require('express');
-const app = express();
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
+const app = express();
+const { MongoClient, ServerApiVersion } = require('mongodb');
+const { Server } = require('socket.io');
+const http = require('http');
 const port = process.env.PORT || 5000;
+
+const server = http.createServer(app);
 
 const corsOption = {
     origin: ['http://localhost:5173'],
@@ -15,8 +19,10 @@ const corsOption = {
 app.use(cors(corsOption));
 app.use(express.json());
 
+const io = new Server(server, {
+    cors: corsOption
+});
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lzi65.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -34,28 +40,18 @@ async function run() {
         await client.connect();
 
         const userCollection = client.db("eduTaskHubDB").collection("users");
+        const tasksCollection = client.db("eduTaskHubDB").collection("tasks");
 
-        // jwt related api
-        app.post('/jwt', async (req, res) => {
-            const user = req.body;
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' });
-            res.send({ token });
-        })
+        // WebSocket for Real-time Updates
+        io.on("connection", (socket) => {
+            console.log("User connected:", socket.id);
 
-        // middleware for jwt token verification
-        const verifyToken = (req, res, next) => {
-            if (!req.headers.authorization) {
-                return res.status(401).send({ message: 'unauthorized access' });
-            }
-            const token = req.headers.authorization.split(' ')[1];
-            jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-                if (err) {
-                    return res.status(401).send({ message: 'unauthorized access' })
-                }
-                req.decoded = decoded;
-                next();
-            })
-        }
+            socket.on("disconnect", () => {
+                console.log("User disconnected:", socket.id);
+            });
+        });
+
+        // users related Api
         app.post('/users', async (req, res) => {
             const user = req.body;
             const query = { email: user.email }
@@ -66,6 +62,18 @@ async function run() {
             const result = await userCollection.insertOne(user);
             res.send(result);
         });
+
+        // Tasks related api's
+        app.get("/tasks", async (req, res) => {
+            const tasks = await tasksCollection.find().toArray();
+            res.send(tasks);
+        })
+        app.post("/tasks", async (req, res) => {
+            const newTask = { ...req.body, timestamp: new Date() };
+            const result = await tasksCollection.insertOne(newTask);
+            io.emit("taskUpdated");
+            res.send({ _id: result.insertedId, ...newTask })
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
@@ -82,6 +90,6 @@ app.get('/', (req, res) => {
     res.send("Edu-task-hub is running")
 })
 
-app.listen(port, () => {
-    console.log(`Edu-task-hub is running ${port}`);
-})
+server.listen(port, () => {
+    console.log(`Edu-task-hub WebSocket server running on port ${port}`);
+});
