@@ -2,7 +2,7 @@ require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { Server } = require('socket.io');
 const http = require('http');
 const port = process.env.PORT || 5000;
@@ -73,6 +73,14 @@ async function run() {
             const result = await tasksCollection.insertOne(newTask);
             io.emit("taskUpdated");
             res.send({ _id: result.insertedId, ...newTask })
+        })
+
+        app.delete("/tasks/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await tasksCollection.deleteOne(query);
+            io.emit("taskUpdated");
+            res.send(result);
         })
 
         // Send a ping to confirm a successful connection
