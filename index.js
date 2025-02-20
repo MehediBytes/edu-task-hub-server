@@ -69,7 +69,8 @@ async function run() {
             res.send(tasks);
         })
         app.post("/tasks", async (req, res) => {
-            const newTask = { ...req.body, timestamp: new Date() };
+            const { title, description, category, dueDate } = req.body;
+            const newTask = { title, description, category, dueDate: new Date(dueDate), timestamp: new Date() };
             const result = await tasksCollection.insertOne(newTask);
             io.emit("taskUpdated");
             res.send({ _id: result.insertedId, ...newTask })
@@ -88,7 +89,7 @@ async function run() {
             const query = { _id: new ObjectId(id) };
             const { title, description, category } = req.body;
             const result = await tasksCollection.updateOne(
-                 query ,
+                query,
                 { $set: { title, description, category } }
             );
             io.emit("taskUpdated");
