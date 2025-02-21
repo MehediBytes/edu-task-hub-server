@@ -41,6 +41,7 @@ async function run() {
 
         const userCollection = client.db("eduTaskHubDB").collection("users");
         const tasksCollection = client.db("eduTaskHubDB").collection("tasks");
+        const logsCollection = client.db("eduTaskHubDB").collection("logs");
 
         // WebSocket for Real-time Updates
         io.on("connection", (socket) => {
@@ -87,14 +88,28 @@ async function run() {
         app.put("/tasks/:id", async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
-            const { title, description, category } = req.body;
+            const { title, description, category, dueDate } = req.body;
             const result = await tasksCollection.updateOne(
                 query,
-                { $set: { title, description, category } }
+                { $set: { title, description, category, dueDate } }
             );
             io.emit("taskUpdated");
             res.send(result)
         })
+        // Fetch Activity Logs
+        app.get("/logs", async (req, res) => {
+            const logs = await logsCollection.find().sort({ timestamp: -1 }).toArray();
+            res.send(logs);
+        });
+
+        // Add Log Entry
+        app.post("/logs", async (req, res) => {
+            const { message } = req.body;
+            const logEntry = { message, timestamp: new Date() };
+            const result = await logsCollection.insertOne(logEntry);
+            io.emit("taskUpdated");
+            res.send(result);
+        });
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
