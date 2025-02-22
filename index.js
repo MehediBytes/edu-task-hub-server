@@ -3,14 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const { Server } = require('socket.io');
-const http = require('http');
 const port = process.env.PORT || 5000;
 
-const server = http.createServer(app);
 
 const corsOption = {
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://edu-task-hub.web.app', '*'],
     credentials: true,
     optionalSuccessStatus: 200,
 }
@@ -19,9 +16,6 @@ const corsOption = {
 app.use(cors(corsOption));
 app.use(express.json());
 
-const io = new Server(server, {
-    cors: corsOption
-});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lzi65.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -42,15 +36,6 @@ async function run() {
         const userCollection = client.db("eduTaskHubDB").collection("users");
         const tasksCollection = client.db("eduTaskHubDB").collection("tasks");
         const logsCollection = client.db("eduTaskHubDB").collection("logs");
-
-        // WebSocket for Real-time Updates
-        io.on("connection", (socket) => {
-            console.log("User connected:", socket.id);
-
-            socket.on("disconnect", () => {
-                console.log("User disconnected:", socket.id);
-            });
-        });
 
         // users related Api
         app.post('/users', async (req, res) => {
@@ -73,7 +58,6 @@ async function run() {
             const { title, description, category, dueDate } = req.body;
             const newTask = { title, description, category, dueDate: new Date(dueDate), orderIndex: 0, timestamp: new Date() };
             const result = await tasksCollection.insertOne(newTask);
-            io.emit("taskUpdated");
             res.send({ _id: result.insertedId, ...newTask })
         })
 
@@ -81,7 +65,6 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await tasksCollection.deleteOne(query);
-            io.emit("taskUpdated");
             res.send(result);
         })
 
@@ -97,7 +80,6 @@ async function run() {
                 { _id: new ObjectId(id) },
                 { $set: updatedTask }
             );
-            io.emit("taskUpdated");
             res.send(result)
         })
         // Fetch Activity Logs
@@ -111,7 +93,6 @@ async function run() {
             const { message } = req.body;
             const logEntry = { message, timestamp: new Date() };
             const result = await logsCollection.insertOne(logEntry);
-            io.emit("taskUpdated");
             res.send(result);
         });
 
