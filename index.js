@@ -111,6 +111,6 @@ app.get('/', (req, res) => {
     res.send("Edu-task-hub is running")
 })
 
-server.listen(port, () => {
+app.listen(port, () => {
     console.log(`Edu-task-hub WebSocket server running on port ${port}`);
 });
