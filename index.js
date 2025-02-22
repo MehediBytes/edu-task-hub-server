@@ -37,7 +37,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const userCollection = client.db("eduTaskHubDB").collection("users");
         const tasksCollection = client.db("eduTaskHubDB").collection("tasks");
@@ -66,12 +66,12 @@ async function run() {
 
         // Tasks related api's
         app.get("/tasks", async (req, res) => {
-            const tasks = await tasksCollection.find().toArray();
+            const tasks = await tasksCollection.find().sort({ orderIndex: 1 }).toArray();
             res.send(tasks);
-        })
+        });
         app.post("/tasks", async (req, res) => {
             const { title, description, category, dueDate } = req.body;
-            const newTask = { title, description, category, dueDate: new Date(dueDate), timestamp: new Date() };
+            const newTask = { title, description, category, dueDate: new Date(dueDate), orderIndex: 0, timestamp: new Date() };
             const result = await tasksCollection.insertOne(newTask);
             io.emit("taskUpdated");
             res.send({ _id: result.insertedId, ...newTask })
@@ -87,11 +87,15 @@ async function run() {
 
         app.put("/tasks/:id", async (req, res) => {
             const id = req.params.id;
-            const query = { _id: new ObjectId(id) };
-            const { title, description, category, dueDate } = req.body;
+            const { title, description, category, dueDate, orderIndex } = req.body;
+            const categoryTasksCount = await tasksCollection.countDocuments({ category });
+
+            const updatedTask = {
+                title, description, category, dueDate, orderIndex: categoryTasksCount
+            };
             const result = await tasksCollection.updateOne(
-                query,
-                { $set: { title, description, category, dueDate } }
+                { _id: new ObjectId(id) },
+                { $set: updatedTask }
             );
             io.emit("taskUpdated");
             res.send(result)
@@ -112,8 +116,8 @@ async function run() {
         });
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
